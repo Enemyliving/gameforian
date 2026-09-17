@@ -447,68 +447,7 @@ function buildCar(){
   return g;
 }
 
-function buildCop(){
-  const g = new THREE.Group();
-  const navy   = new THREE.MeshStandardMaterial({ color:0x243a6b, roughness:.8 });
-  const vest   = new THREE.MeshStandardMaterial({ color:0x2d4d8f, roughness:.7 });
-  const skinM  = new THREE.MeshStandardMaterial({ color:0xf0c49a, roughness:.85 });
-  const darkM  = new THREE.MeshStandardMaterial({ color:0x1a1a22, roughness:.7 });
-  const neonM  = new THREE.MeshStandardMaterial({ color:0xf5e642, roughness:.5, emissive:0x554d00, emissiveIntensity:.35 });
-
-  const rider = new THREE.Group();
-  const torso = new THREE.Mesh(new THREE.BoxGeometry(.8, .95, .48), vest);
-  torso.position.y = 1.38; torso.castShadow = true; rider.add(torso);
-  // hi-vis band across the chest
-  const band = new THREE.Mesh(new THREE.BoxGeometry(.84, .18, .52), neonM);
-  band.position.y = 1.42; rider.add(band);
-
-  const hips = new THREE.Mesh(new THREE.BoxGeometry(.72, .34, .46), navy);
-  hips.position.y = .86; hips.castShadow = true; rider.add(hips);
-
-  const legF = new THREE.Mesh(new THREE.BoxGeometry(.26, .74, .3), navy);
-  legF.position.set(-.18, .38, .12); legF.castShadow = true; rider.add(legF);
-  const legB = legF.clone(); legB.position.set(.18, .38, -.1); rider.add(legB);
-
-  const armL = new THREE.Mesh(new THREE.BoxGeometry(.19, .62, .19), vest);
-  armL.position.set(-.5, 1.42, .3); armL.rotation.x = -.85; armL.castShadow = true; rider.add(armL);
-  const armR = armL.clone(); armR.position.set(.5, 1.42, .3); rider.add(armR);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(.3, 12, 10), skinM);
-  head.position.y = 2.05; head.castShadow = true; rider.add(head);
-  const cap = new THREE.Mesh(new THREE.CylinderGeometry(.31,.33,.2,12), navy);
-  cap.position.y = 2.26; cap.castShadow = true; rider.add(cap);
-  const peak = new THREE.Mesh(new THREE.BoxGeometry(.5,.05,.28), darkM);
-  peak.position.set(0, 2.18, .28); rider.add(peak);
-  const badge = new THREE.Mesh(new THREE.CircleGeometry(.07, 8), neonM);
-  badge.position.set(0, 2.3, .3); rider.add(badge);
-  g.add(rider);
-  g.userData.rider = rider;
-
-  // kick scooter
-  const scooter = new THREE.Group();
-  const deck = new THREE.Mesh(new THREE.BoxGeometry(.4, .08, 1.25), darkM);
-  deck.position.y = .16; deck.castShadow = true; scooter.add(deck);
-  const stem = new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,1.5,8), darkM);
-  stem.position.set(0, .9, .56); stem.rotation.x = -.16; scooter.add(stem);
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.66,8), darkM);
-  bar.rotation.z = Math.PI/2; bar.position.set(0, 1.6, .5); scooter.add(bar);
-  const wGeo = new THREE.CylinderGeometry(.22,.22,.1,14);
-  const wMat = new THREE.MeshStandardMaterial({ color:0xdedede, roughness:.5 });
-  const wF = new THREE.Mesh(wGeo, wMat); wF.rotation.z = Math.PI/2; wF.position.set(0,.22,.62); wF.castShadow = true;
-  const wB = wF.clone(); wB.position.set(0,.22,-.58);
-  scooter.add(wF, wB);
-  g.add(scooter);
-  g.userData.wheels = [wF, wB];
-
-  // flashing light on the handlebar
-  const beacon = new THREE.Mesh(new THREE.SphereGeometry(.12, 10, 8),
-    new THREE.MeshStandardMaterial({ color:0x3b6bff, emissive:0x2244ff, emissiveIntensity:1.2, roughness:.3 }));
-  beacon.position.set(0, 1.78, .5);
-  g.add(beacon);
-  g.userData.beacon = beacon;
-
-  return g;
-}
+const OB_TYPES = ['log','branch','car'];
 let lastType = null, lastLane = null;
 function spawnObstacle(){
   let type = OB_TYPES[Math.floor(Math.random()*OB_TYPES.length)];
