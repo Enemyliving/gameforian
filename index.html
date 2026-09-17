@@ -31,6 +31,20 @@
     position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
     color:#fff; opacity:.55; font-size:13px; text-align:center; pointer-events:none; line-height:1.5;
   }
+  #chase {
+    position:fixed; top:92px; left:50%; transform:translate(-50%,-14px);
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    opacity:0; transition:opacity .25s, transform .25s; pointer-events:none;
+  }
+  #chase.on { opacity:1; transform:translate(-50%,0); }
+  #chaseLabel {
+    color:#ffdca8; font-weight:800; font-size:14px; letter-spacing:1.5px;
+    text-shadow:0 2px 8px rgba(0,0,0,.7); display:flex; align-items:center; gap:6px;
+  }
+  #chaseLabel .dot { width:8px; height:8px; border-radius:50%; background:#ff3b3b; animation:blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+  #chaseBar { width:150px; height:6px; border-radius:3px; background:rgba(255,255,255,.22); overflow:hidden; }
+  #chaseFill { height:100%; width:100%; background:linear-gradient(90deg,#ffd76e,#ff3b3b); }
 
   #overlay {
     position:fixed; inset:0; display:flex; flex-direction:column;
@@ -70,12 +84,13 @@
   <div>⭐ <span id="score">0</span></div>
 </div>
 <div id="speedbar"><div id="speedfill"></div></div>
-<div id="hint">← → полоса &nbsp;·&nbsp; ↑ / пробел олли &nbsp;·&nbsp; ↓ подкат<br>на телефоне — свайпы</div>
+<div id="chase"><div id="chaseLabel"><span class="dot"></span>ЗА ТОБОЙ ПОГОНЯ</div><div id="chaseBar"><div id="chaseFill"></div></div></div>
+<div id="hint">← → полоса &nbsp;·&nbsp; ↑ олли &nbsp;·&nbsp; ↑↑ двойной — перепрыгнуть машину &nbsp;·&nbsp; ↓ подкат<br>не спамь прыжком — упадёшь при приземлении</div>
 
 <div id="overlay">
   <img class="avatar" id="menuFace" alt="">
   <h1>Road Rush 3D</h1>
-  <p>Катись на скейте по шоссе. Перепрыгивай брёвна, подныривай под ветки и объезжай машины, вставшие поперёк дороги.</p>
+  <p>Катись на скейте по шоссе. Перепрыгивай брёвна, подныривай под ветки, а машины — только двойным прыжком (ровно два тапа, спам собьёт приземление). Изредка за тобой увязывается полицейский на самокате — оторвись от него манёврами на 10 секунд.</p>
   <button id="startBtn">Начать заезд</button>
 </div>
 
@@ -96,6 +111,8 @@ const startBtn = document.getElementById('startBtn');
 const scoreEl  = document.getElementById('score');
 const coinsEl  = document.getElementById('coins');
 const speedFill= document.getElementById('speedfill');
+const chaseEl  = document.getElementById('chase');
+const chaseFill= document.getElementById('chaseFill');
 document.getElementById('menuFace').src = FACE_SRC.happy;
 
 if (typeof THREE === 'undefined'){
@@ -297,7 +314,72 @@ const wheels = [];
 board.position.y = .2;
 player.add(board);
 
-/* ================= object pools ================= */
+/* ================= cop (chases on a kick scooter) ================= */
+const cop = new THREE.Group();
+cop.visible = false;
+scene.add(cop);
+
+const copRider = new THREE.Group();
+cop.add(copRider);
+
+const copShirtMat = new THREE.MeshStandardMaterial({ color:0x1f3a5e, roughness:.7 });
+const copPantsMat = new THREE.MeshStandardMaterial({ color:0x14212f, roughness:.85 });
+const copSkinMat  = new THREE.MeshStandardMaterial({ color:0xe8b48a, roughness:.85 });
+const copCapMat   = new THREE.MeshStandardMaterial({ color:0x10202f, roughness:.6 });
+const copBadgeMat = new THREE.MeshStandardMaterial({ color:0xffd54f, roughness:.4, metalness:.6, emissive:0x664400, emissiveIntensity:.3 });
+
+const copTorso = new THREE.Mesh(new THREE.BoxGeometry(.8, .94, .48), copShirtMat);
+copTorso.position.y = 1.38; copTorso.castShadow = true; copRider.add(copTorso);
+const copBadge = new THREE.Mesh(new THREE.BoxGeometry(.14,.14,.05), copBadgeMat);
+copBadge.position.set(-.2, 1.55, .27); copRider.add(copBadge);
+
+const copHips = new THREE.Mesh(new THREE.BoxGeometry(.72, .34, .46), copPantsMat);
+copHips.position.y = .84; copHips.castShadow = true; copRider.add(copHips);
+
+const copLegL = new THREE.Mesh(new THREE.BoxGeometry(.27, .72, .3), copPantsMat);
+copLegL.position.set(-.2, .38, .05); copLegL.castShadow = true; copRider.add(copLegL);
+const copLegR = copLegL.clone(); copLegR.position.set(.2, .38, -.28); copRider.add(copLegR);
+
+const copArmL = new THREE.Mesh(new THREE.BoxGeometry(.2, .64, .2), copShirtMat);
+copArmL.position.set(-.54, 1.5, .3); copArmL.rotation.x = -.5; copArmL.castShadow = true; copRider.add(copArmL);
+const copArmR = new THREE.Mesh(new THREE.BoxGeometry(.2, .64, .2), copShirtMat);
+copArmR.position.set(.54, 1.5, -.3); copArmR.rotation.x = -.5; copArmR.castShadow = true; copRider.add(copArmR);
+
+const copNeck = new THREE.Mesh(new THREE.CylinderGeometry(.13,.15,.16,8), copSkinMat);
+copNeck.position.y = 1.9; copRider.add(copNeck);
+const copHead = new THREE.Mesh(new THREE.SphereGeometry(.4, 12, 10), copSkinMat);
+copHead.position.y = 2.32; copHead.castShadow = true; copRider.add(copHead);
+const copShades = new THREE.Mesh(new THREE.BoxGeometry(.5,.13,.1), new THREE.MeshStandardMaterial({ color:0x0a0a0a, roughness:.2 }));
+copShades.position.set(0, 2.35, .35); copRider.add(copShades);
+const copCap = new THREE.Mesh(new THREE.CylinderGeometry(.38,.42,.22,14), copCapMat);
+copCap.position.y = 2.6; copCap.castShadow = true; copRider.add(copCap);
+const copVisor = new THREE.Mesh(new THREE.BoxGeometry(.5,.06,.28), copCapMat);
+copVisor.position.set(0, 2.5, .3); copRider.add(copVisor);
+
+/* kick scooter */
+const copScooter = new THREE.Group();
+const scooterDeck = new THREE.Mesh(new THREE.BoxGeometry(1.5, .07, .34),
+  new THREE.MeshStandardMaterial({ color:0x2b2b30, roughness:.55, metalness:.3 }));
+scooterDeck.castShadow = true; copScooter.add(scooterDeck);
+const scooterStem = new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,1.15,8),
+  new THREE.MeshStandardMaterial({ color:0xb0b6bd, roughness:.35, metalness:.75 }));
+scooterStem.position.set(-.62, .6, 0); scooterStem.rotation.z = -.14; scooterStem.castShadow = true;
+copScooter.add(scooterStem);
+const scooterBar = new THREE.Mesh(new THREE.BoxGeometry(.06,.06,.62),
+  new THREE.MeshStandardMaterial({ color:0xb0b6bd, roughness:.35, metalness:.75 }));
+scooterBar.position.set(-.71, 1.14, 0); copScooter.add(scooterBar);
+const copWheelGeo = new THREE.CylinderGeometry(.15,.15,.09,12);
+const copWheelMat = new THREE.MeshStandardMaterial({ color:0x1c1c1c, roughness:.55 });
+const copWheels = [];
+[[-.62,0],[.6,0]].forEach(([wx])=>{
+  const w = new THREE.Mesh(copWheelGeo, copWheelMat);
+  w.rotation.z = Math.PI/2; w.position.set(wx, -.1, 0); w.castShadow = true;
+  copScooter.add(w); copWheels.push(w);
+});
+copScooter.position.y = .17;
+cop.add(copScooter);
+
+
 const obstacles = [];
 const coins = [];
 
@@ -365,7 +447,68 @@ function buildCar(){
   return g;
 }
 
-const OB_TYPES = ['log','branch','car'];
+function buildCop(){
+  const g = new THREE.Group();
+  const navy   = new THREE.MeshStandardMaterial({ color:0x243a6b, roughness:.8 });
+  const vest   = new THREE.MeshStandardMaterial({ color:0x2d4d8f, roughness:.7 });
+  const skinM  = new THREE.MeshStandardMaterial({ color:0xf0c49a, roughness:.85 });
+  const darkM  = new THREE.MeshStandardMaterial({ color:0x1a1a22, roughness:.7 });
+  const neonM  = new THREE.MeshStandardMaterial({ color:0xf5e642, roughness:.5, emissive:0x554d00, emissiveIntensity:.35 });
+
+  const rider = new THREE.Group();
+  const torso = new THREE.Mesh(new THREE.BoxGeometry(.8, .95, .48), vest);
+  torso.position.y = 1.38; torso.castShadow = true; rider.add(torso);
+  // hi-vis band across the chest
+  const band = new THREE.Mesh(new THREE.BoxGeometry(.84, .18, .52), neonM);
+  band.position.y = 1.42; rider.add(band);
+
+  const hips = new THREE.Mesh(new THREE.BoxGeometry(.72, .34, .46), navy);
+  hips.position.y = .86; hips.castShadow = true; rider.add(hips);
+
+  const legF = new THREE.Mesh(new THREE.BoxGeometry(.26, .74, .3), navy);
+  legF.position.set(-.18, .38, .12); legF.castShadow = true; rider.add(legF);
+  const legB = legF.clone(); legB.position.set(.18, .38, -.1); rider.add(legB);
+
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(.19, .62, .19), vest);
+  armL.position.set(-.5, 1.42, .3); armL.rotation.x = -.85; armL.castShadow = true; rider.add(armL);
+  const armR = armL.clone(); armR.position.set(.5, 1.42, .3); rider.add(armR);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.3, 12, 10), skinM);
+  head.position.y = 2.05; head.castShadow = true; rider.add(head);
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(.31,.33,.2,12), navy);
+  cap.position.y = 2.26; cap.castShadow = true; rider.add(cap);
+  const peak = new THREE.Mesh(new THREE.BoxGeometry(.5,.05,.28), darkM);
+  peak.position.set(0, 2.18, .28); rider.add(peak);
+  const badge = new THREE.Mesh(new THREE.CircleGeometry(.07, 8), neonM);
+  badge.position.set(0, 2.3, .3); rider.add(badge);
+  g.add(rider);
+  g.userData.rider = rider;
+
+  // kick scooter
+  const scooter = new THREE.Group();
+  const deck = new THREE.Mesh(new THREE.BoxGeometry(.4, .08, 1.25), darkM);
+  deck.position.y = .16; deck.castShadow = true; scooter.add(deck);
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(.06,.06,1.5,8), darkM);
+  stem.position.set(0, .9, .56); stem.rotation.x = -.16; scooter.add(stem);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.66,8), darkM);
+  bar.rotation.z = Math.PI/2; bar.position.set(0, 1.6, .5); scooter.add(bar);
+  const wGeo = new THREE.CylinderGeometry(.22,.22,.1,14);
+  const wMat = new THREE.MeshStandardMaterial({ color:0xdedede, roughness:.5 });
+  const wF = new THREE.Mesh(wGeo, wMat); wF.rotation.z = Math.PI/2; wF.position.set(0,.22,.62); wF.castShadow = true;
+  const wB = wF.clone(); wB.position.set(0,.22,-.58);
+  scooter.add(wF, wB);
+  g.add(scooter);
+  g.userData.wheels = [wF, wB];
+
+  // flashing light on the handlebar
+  const beacon = new THREE.Mesh(new THREE.SphereGeometry(.12, 10, 8),
+    new THREE.MeshStandardMaterial({ color:0x3b6bff, emissive:0x2244ff, emissiveIntensity:1.2, roughness:.3 }));
+  beacon.position.set(0, 1.78, .5);
+  g.add(beacon);
+  g.userData.beacon = beacon;
+
+  return g;
+}
 let lastType = null, lastLane = null;
 function spawnObstacle(){
   let type = OB_TYPES[Math.floor(Math.random()*OB_TYPES.length)];
@@ -421,8 +564,19 @@ function burst(x,y,z){
 /* ================= game state ================= */
 let state = 'menu';
 let lane, targetX, py, vy, grounded, airState, slideT, coyoteT, bufJump, bufSlide;
-let speed, dist, coinCount, spawnT, coinT, deathT, shake, best;
+let speed, dist, coinCount, spawnT, coinT, deathT, shake, best, gameTime;
 best = parseInt(localStorage.getItem('roadrush_best') || '0', 10);
+
+/* ---- cop chase state ---- */
+const COP_SPAWN_MIN   = 5;
+const COP_SPAWN_MAX   = 20;
+const COP_CHASE_TIME  = 10;
+const COP_SPEED_MULT  = 1.16;   // baseline: chases you down
+const COP_PENALTY_MULT= 0.78;   // slower than you while reacting to a lane change
+const COP_REACT_WINDOW= 0.55;   // seconds the penalty lasts after each player lane change
+const COP_CATCH_Z     = 1.0;
+let copState;          // 'idle' | 'waiting' | 'chasing' | 'falling' | 'caught'
+let copSpawnTimer, copSide, copLane, copGapZ, copChaseTimer, copFallT, copLastLaneChangeT;
 
 function clearWorld(){
   obstacles.forEach(o=>scene.remove(o.mesh));
@@ -437,7 +591,7 @@ function resetGame(){
   player.position.set(0,0,0);
   py = 0; vy = 0; grounded = true; airState = 'ride';
   slideT = 0; coyoteT = 0; bufJump = 0; bufSlide = 0;
-  speed = BASE_SPEED; dist = 0; coinCount = 0;
+  speed = BASE_SPEED; dist = 0; coinCount = 0; gameTime = 0;
   spawnT = .8; coinT = 1.6; deathT = 0; shake = 0;
   rider.scale.set(1,1,1);
   rider.rotation.set(0,0,0);
@@ -448,16 +602,126 @@ function resetGame(){
   scoreEl.textContent = '0'; coinsEl.textContent = '0';
   speedFill.style.width = '0%';
   camera.fov = 62; camera.updateProjectionMatrix();
+
+  cop.visible = false;
+  cop.rotation.set(0,0,0);
+  copState = 'idle';
+  copSpawnTimer = COP_SPAWN_MIN + Math.random()*(COP_SPAWN_MAX-COP_SPAWN_MIN);
+  copLastLaneChangeT = -99;
+  chaseEl.classList.remove('on');
+
+  jumpCombo = 0; jumpComboT = 0; superJumpActive = false; wipeoutPending = false;
 }
 
-/* ================= input ================= */
-function tryJump(){
+/* ================= cop AI ================= */
+function spawnCop(){
+  copSide = Math.random() < .5 ? -1 : 1;
+  cop.position.set(copSide*(ROAD_W/2 + 1.4), 0, SPAWN_Z + 20);
+  cop.rotation.set(0,0,0);
+  cop.visible = true;
+  copState = 'waiting';
+}
+
+function beginChase(){
+  copState = 'chasing';
+  copLane = lane;
+  copGapZ = 2.4;
+  copChaseTimer = 0;
+  chaseEl.classList.add('on');
+  chaseFill.style.width = '100%';
+}
+
+function copFall(){
+  copState = 'falling';
+  copFallT = 0;
+  chaseEl.classList.remove('on');
+}
+
+function scheduleNextCop(){
+  cop.visible = false;
+  copState = 'idle';
+  copSpawnTimer = COP_SPAWN_MIN + Math.random()*(COP_SPAWN_MAX-COP_SPAWN_MIN);
+}
+
+function updateCop(dt){
+  if (copState === 'idle'){
+    copSpawnTimer -= dt;
+    if (copSpawnTimer <= 0) spawnCop();
+    return;
+  }
+  if (copState === 'waiting'){
+    cop.position.z += speed*dt;
+    if (cop.position.z > -1.2) beginChase();
+    return;
+  }
+  if (copState === 'chasing'){
+    copChaseTimer += dt;
+    if (copChaseTimer >= COP_CHASE_TIME){ copFall(); return; }
+
+    if (copLane !== lane){ copLane = lane; }
+    const sinceChange = gameTime - copLastLaneChangeT;
+    const mult = sinceChange < COP_REACT_WINDOW ? COP_PENALTY_MULT : COP_SPEED_MULT;
+    copGapZ += speed*(1-mult)*dt;
+    copGapZ = THREE.MathUtils.clamp(copGapZ, COP_CATCH_Z*0.6, 15);
+    cop.position.z = copGapZ;
+
+    const tx = LANE_X[copLane];
+    cop.position.x += (tx - cop.position.x) * Math.min(1, 8*dt);
+    const clean = Math.abs(cop.position.x - tx) < 0.15;
+    copRider.rotation.z = THREE.MathUtils.lerp(copRider.rotation.z, clean ? 0 : (tx-cop.position.x)*-.3, .2);
+
+    copWheels.forEach(w => w.rotation.x -= speed*dt*4);
+    const copBob = Math.sin(gameTime*9)*.03;
+    copRider.position.y = copBob;
+
+    chaseFill.style.width = (100 - (copChaseTimer/COP_CHASE_TIME*100)).toFixed(0) + '%';
+
+    if (copGapZ <= COP_CATCH_Z){
+      copState = 'caught';
+      chaseEl.classList.remove('on');
+      die(cop.position);
+    }
+    return;
+  }
+  if (copState === 'falling'){
+    copFallT += dt;
+    cop.position.z += speed*dt;
+    copRider.rotation.z = THREE.MathUtils.lerp(copRider.rotation.z, 1.4, Math.min(1, 6*dt));
+    copRider.rotation.x = THREE.MathUtils.lerp(copRider.rotation.x, .6, Math.min(1, 6*dt));
+    cop.position.y = Math.max(0, cop.position.y - dt*2);
+    if (copFallT > 1.1) scheduleNextCop();
+    return;
+  }
+}
+
+
+/* ---- jump-press combo: exactly 2 taps = a big jump that clears cars.
+   1 tap = normal ollie (can't clear a car). 3+ taps = spam -> wipeout on landing. ---- */
+const JUMP_COMBO_WINDOW = 0.45;
+const SUPER_JUMP_BONUS  = 6.2;
+let jumpCombo = 0, jumpComboT = 0, superJumpActive = false, wipeoutPending = false;
+
+function registerJumpPress(){
   if (state !== 'play') return;
-  if (grounded || coyoteT > 0){
-    vy = JUMP_V; grounded = false; coyoteT = 0; airState = 'ollie';
-    if (slideT > 0){ slideT = 0; }
+  if (jumpComboT <= 0){ jumpCombo = 0; }
+  jumpCombo++;
+  jumpComboT = JUMP_COMBO_WINDOW;
+
+  if (jumpCombo === 1){
+    if (grounded || coyoteT > 0){
+      vy = JUMP_V; grounded = false; coyoteT = 0; airState = 'ollie';
+      if (slideT > 0) slideT = 0;
+    } else {
+      bufJump = BUFFER;
+    }
+  } else if (jumpCombo === 2){
+    if (!grounded){ vy = Math.max(vy, 0) + SUPER_JUMP_BONUS; }
+    else { vy = JUMP_V + SUPER_JUMP_BONUS; grounded = false; coyoteT = 0; airState = 'ollie'; }
+    superJumpActive = true;
   } else {
-    bufJump = BUFFER;               // remembered and fired on landing
+    // spamming the button — the extra taps throw the landing off balance
+    superJumpActive = false;
+    wipeoutPending = true;
   }
 }
 function trySlide(){
@@ -474,6 +738,7 @@ function move(dir){
   const n = lane + dir;
   if (n < 0 || n > 2) return;
   lane = n; targetX = LANE_X[lane];
+  copLastLaneChangeT = gameTime;   // cop needs a moment to react/swerve — loses ground here
 }
 
 window.addEventListener('keydown', e=>{
@@ -481,7 +746,7 @@ window.addEventListener('keydown', e=>{
   const k = e.key.toLowerCase();
   if (k === 'arrowleft'  || k === 'a') { move(-1); e.preventDefault(); }
   if (k === 'arrowright' || k === 'd') { move(1);  e.preventDefault(); }
-  if (k === 'arrowup'    || k === 'w' || k === ' ') { tryJump(); e.preventDefault(); }
+  if (k === 'arrowup'    || k === 'w' || k === ' ') { registerJumpPress(); e.preventDefault(); }
   if (k === 'arrowdown'  || k === 's') { trySlide(); e.preventDefault(); }
   if (k === 'enter' && state !== 'play') startGame();
 });
@@ -497,12 +762,13 @@ dom.addEventListener('touchend', e=>{
   const dy = e.changedTouches[0].clientY - ty;
   if (Math.max(Math.abs(dx),Math.abs(dy)) < 26) return;
   if (Math.abs(dx) > Math.abs(dy)) move(dx > 0 ? 1 : -1);
-  else if (dy < 0) tryJump();
+  else if (dy < 0) registerJumpPress();
   else trySlide();
 }, {passive:true});
 
 /* ================= update ================= */
 function update(dt){
+  gameTime += dt;
   dist  += speed * dt;
   speed  = Math.min(MAX_SPEED, speed + SPEED_RAMP * dt);
 
@@ -520,12 +786,21 @@ function update(dt){
     py += vy * dt;
     if (py <= 0){
       py = 0; vy = 0; grounded = true; airState = 'ride';
-      if (bufSlide > 0){ slideT = SLIDE_TIME; bufSlide = 0; }
-      else if (bufJump > 0){ vy = JUMP_V; grounded = false; airState = 'ollie'; bufJump = 0; }
+      if (wipeoutPending){
+        wipeoutPending = false; superJumpActive = false; jumpCombo = 0; jumpComboT = 0;
+        die(player.position);
+      } else if (bufSlide > 0){
+        slideT = SLIDE_TIME; bufSlide = 0; superJumpActive = false;
+      } else if (bufJump > 0){
+        vy = JUMP_V; grounded = false; airState = 'ollie'; bufJump = 0; superJumpActive = false;
+      } else {
+        superJumpActive = false;
+      }
     }
   } else {
     coyoteT = COYOTE;
   }
+  if (jumpComboT > 0){ jumpComboT -= dt; if (jumpComboT <= 0) jumpCombo = 0; }
   if (coyoteT > 0 && !grounded) coyoteT -= dt;
   if (bufJump  > 0) bufJump  -= dt;
   if (bufSlide > 0) bufSlide -= dt;
@@ -579,11 +854,14 @@ function update(dt){
       let crash = false;
       if (o.type === 'log')         crash = py < 1.05;
       else if (o.type === 'branch') crash = !sliding;
-      else                          crash = true;   // car blocks the lane outright
+      else                          crash = !superJumpActive;   // car: only a two-tap super jump clears it
       if (crash){ o.hit = true; die(o.mesh.position); }
     }
     if (o.mesh.position.z > DESPAWN_Z){ scene.remove(o.mesh); obstacles.splice(i,1); }
   }
+
+  /* ---- police chase ---- */
+  updateCop(dt);
 
   /* ---- coins ---- */
   for (let i=coins.length-1; i>=0; i--){
