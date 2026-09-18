@@ -504,6 +504,7 @@ function burst(x,y,z){
 let state = 'menu';
 let lane, targetX, py, vy, grounded, airState, slideT, coyoteT, bufJump, bufSlide;
 let speed, dist, coinCount, spawnT, coinT, deathT, shake, best, gameTime;
+let camZoom = 0;   // 0 = normal follow distance, 1 = pulled back for a police chase
 best = parseInt(localStorage.getItem('roadrush_best') || '0', 10);
 
 /* ---- cop chase state ---- */
@@ -513,9 +514,10 @@ const COP_CHASE_TIME  = 10;
 const COP_SPEED_MULT  = 1.16;   // baseline: chases you down
 const COP_PENALTY_MULT= 0.78;   // slower than you while reacting to a lane change
 const COP_REACT_WINDOW= 0.55;   // seconds the penalty lasts after each player lane change
+const COP_GRACE_TIME  = 2.2;    // he's just mounting up — gap holds steady while you get your bearings
 const COP_CATCH_Z     = 1.0;
 let copState;          // 'idle' | 'waiting' | 'chasing' | 'falling' | 'caught'
-let copSpawnTimer, copSide, copLane, copGapZ, copChaseTimer, copFallT, copLastLaneChangeT;
+let copSpawnTimer, copSide, copLane, copGapZ, copChaseTimer, copFallT, copLastLaneChangeT, copGraceT;
 
 function clearWorld(){
   obstacles.forEach(o=>scene.remove(o.mesh));
@@ -541,12 +543,15 @@ function resetGame(){
   scoreEl.textContent = '0'; coinsEl.textContent = '0';
   speedFill.style.width = '0%';
   camera.fov = 62; camera.updateProjectionMatrix();
+  camZoom = 0;
+  camera.position.z = 8.2;
 
   cop.visible = false;
   cop.rotation.set(0,0,0);
   copState = 'idle';
   copSpawnTimer = COP_SPAWN_MIN + Math.random()*(COP_SPAWN_MAX-COP_SPAWN_MIN);
   copLastLaneChangeT = -99;
+  copGraceT = 0;
   chaseEl.classList.remove('on');
 
   jumpCombo = 0; jumpComboT = 0; superJumpActive = false; wipeoutPending = false;
@@ -557,6 +562,8 @@ function spawnCop(){
   copSide = Math.random() < .5 ? -1 : 1;
   cop.position.set(copSide*(ROAD_W/2 + 1.4), 0, SPAWN_Z + 20);
   cop.rotation.set(0,0,0);
+  copRider.rotation.set(0,0,0);
+  copRider.position.y = 0;
   cop.visible = true;
   copState = 'waiting';
 }
@@ -564,8 +571,9 @@ function spawnCop(){
 function beginChase(){
   copState = 'chasing';
   copLane = lane;
-  copGapZ = 2.4;
+  copGapZ = 7.5;          // starts well behind — room to learn the mechanic before it gets tense
   copChaseTimer = 0;
+  copGraceT = COP_GRACE_TIME;
   chaseEl.classList.add('on');
   chaseFill.style.width = '100%';
 }
@@ -578,6 +586,9 @@ function copFall(){
 
 function scheduleNextCop(){
   cop.visible = false;
+  cop.rotation.set(0,0,0);
+  copRider.rotation.set(0,0,0);
+  copRider.position.y = 0;
   copState = 'idle';
   copSpawnTimer = COP_SPAWN_MIN + Math.random()*(COP_SPAWN_MAX-COP_SPAWN_MIN);
 }
@@ -594,14 +605,19 @@ function updateCop(dt){
     return;
   }
   if (copState === 'chasing'){
-    copChaseTimer += dt;
-    if (copChaseTimer >= COP_CHASE_TIME){ copFall(); return; }
-
     if (copLane !== lane){ copLane = lane; }
-    const sinceChange = gameTime - copLastLaneChangeT;
-    const mult = sinceChange < COP_REACT_WINDOW ? COP_PENALTY_MULT : COP_SPEED_MULT;
-    copGapZ += speed*(1-mult)*dt;
-    copGapZ = THREE.MathUtils.clamp(copGapZ, COP_CATCH_Z*0.6, 15);
+
+    if (copGraceT > 0){
+      // he's still revving up the scooter — distance holds, no pressure yet
+      copGraceT -= dt;
+    } else {
+      copChaseTimer += dt;
+      if (copChaseTimer >= COP_CHASE_TIME){ copFall(); return; }
+      const sinceChange = gameTime - copLastLaneChangeT;
+      const mult = sinceChange < COP_REACT_WINDOW ? COP_PENALTY_MULT : COP_SPEED_MULT;
+      copGapZ += speed*(1-mult)*dt;
+    }
+    copGapZ = THREE.MathUtils.clamp(copGapZ, COP_CATCH_Z*0.6, 24);
     cop.position.z = copGapZ;
 
     const tx = LANE_X[copLane];
@@ -615,7 +631,7 @@ function updateCop(dt){
 
     chaseFill.style.width = (100 - (copChaseTimer/COP_CHASE_TIME*100)).toFixed(0) + '%';
 
-    if (copGapZ <= COP_CATCH_Z){
+    if (copGraceT <= 0 && copGapZ <= COP_CATCH_Z){
       copState = 'caught';
       chaseEl.classList.remove('on');
       die(cop.position);
@@ -852,10 +868,15 @@ function die(pos){
 
 /* ================= camera ================= */
 function updateCamera(dt){
+  const chasing = (copState === 'chasing');
+  camZoom += ((chasing ? 1 : 0) - camZoom) * Math.min(1, 1.8*dt);
+
   const targetCx = player.position.x * .42;
   camera.position.x += (targetCx - camera.position.x) * Math.min(1, 6*dt);
-  const targetCy = 4.3 + py * .32;
+  const targetCy = 4.3 + py * .32 + camZoom * 1.5;
   camera.position.y += (targetCy - camera.position.y) * Math.min(1, 7*dt);
+  const targetCz = 8.2 + camZoom * 8.5;
+  camera.position.z += (targetCz - camera.position.z) * Math.min(1, 2.4*dt);
 
   if (shake > 0){
     shake = Math.max(0, shake - dt*1.7);
